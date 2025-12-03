@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>局域网聊天室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#A7C7E7',
+                        secondary: '#F5F5DC',
+                        accent: '#FFDAB9',
+                        dark: '#4A4A4A',
+                        light: '#F9F9F9',
+                        success: '#90EE90',
+                        warning: '#FFA500',
+                        danger: '#FF6347'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                        'hover': '0 8px 30px rgba(0, 0, 0, 0.12)'
+                    }
+                }
+            }
+        };
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto { content-visibility: auto; }
+            .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+            .scrollbar-hide::-webkit-scrollbar { display: none; }
+            .bg-wave {
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320'%3E%3Cpath fill='%23A7C7E7' fill-opacity='0.1' d='M0,192L48,181.3C96,171,192,149,288,149.3C384,149,480,171,576,181.3C672,192,768,192,864,181.3C960,171,1056,149,1152,133.3C1248,117,1344,107,1392,101.3L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'%3E%3C/path%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: bottom;
+                background-size: cover;
+            }
+            .transition-all-300 { transition: all 0.3s ease; }
+        }
+    </style>
+</head>
+<body class="bg-secondary bg-wave min-h-screen font-sans text-dark overflow-hidden flex flex-col">
+    <div class="flex flex-col md:flex-row h-screen">
+        <!-- Sidebar -->
+        <aside class="w-full md:w-64 bg-white shadow-soft z-10 flex flex-col transition-all duration-300 ease-in-out translate-x-[-100%] md:translate-x-0 fixed md:relative h-full" id="sidebar">
+            <!-- Top -->
+            <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
+                        <i class="fas fa-comments text-xl"></i>
+                    </div>
+                    <h1 class="text-xl font-bold text-dark">局域网聊天室</h1>
+                </div>
+                <button id="toggle-sidebar" class="md:hidden text-gray-500 hover:text-primary transition-colors">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+
+            <!-- Search -->
+            <div class="p-3 border-b border-gray-100">
+                <div class="relative">
+                    <input type="text" placeholder="搜索联系人..." class="w-full py-2 pl-10 pr-4 rounded-full bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"/>
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-100">
+                <button class="flex-1 py-3 text-primary border-b-2 border-primary font-medium">
+                    <i class="fas fa-comment-alt mr-2"></i>聊天
+                </button>
+                <button class="flex-1 py-3 text-gray-500 hover:text-primary transition-colors">
+                    <i class="fas fa-user-friends mr-2"></i>联系人
+                </button>
+                <button class="flex-1 py-3 text-gray-500 hover:text-primary transition-colors">
+                    <i class="fas fa-phone-alt mr-2"></i>通话
+                </button>
+            </div>
+
+            <!-- Chat List -->
+            <div class="flex-1 overflow-y-auto scrollbar-hide">
+                <div class="p-2">
+                    <h3 class="text-xs uppercase text-gray-400 font-semibold px-3 mb-2">在线用户</h3>
+                    <div id="user-list">
+                        <!-- User items will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom User Info -->
+            <div class="p-3 border-t border-gray-100">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                        {{ nickname[0] | upper }}
+                    </div>
+                    <div class="ml-3 flex-1 min-w-0">
+                        <h4 class="font-medium text-dark truncate">{{ nickname }}</h4>
+                        <p class="text-xs text-gray-500 truncate">在线</p>
+                    </div>
+                    <div class="flex space-x-3">
+                        <button class="text-gray-500 hover:text-primary transition-colors" onclick="alert('设置功能正在建设中')">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <a href="/logout" class="text-gray-500 hover:text-danger transition-colors">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col bg-light relative overflow-hidden w-full">
+            <!-- Header -->
+            <div class="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-4 shadow-sm z-10">
+                <div class="flex items-center">
+                    <button id="show-sidebar" class="md:hidden mr-2 text-gray-500 hover:text-primary transition-colors">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-white">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border-2 border-white"></span>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="font-medium text-dark">公共聊天室</h3>
+                        <p class="text-xs text-gray-500" id="online-count">0 人在线</p>
+                    </div>
+                </div>
+                <div class="flex space-x-3">
+                    <button class="text-gray-500 hover:text-primary transition-colors" onclick="alert('搜索功能正在建设中')">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <button class="text-gray-500 hover:text-primary transition-colors" onclick="alert('通话功能正在建设中')">
+                        <i class="fas fa-phone-alt"></i>
+                    </button>
+                    <button class="text-gray-500 hover:text-primary transition-colors" onclick="alert('视频功能正在建设中')">
+                        <i class="fas fa-video"></i>
+                    </button>
+                    <button class="text-gray-500 hover:text-primary transition-colors" onclick="alert('更多功能正在建设中')">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div id="message-container" class="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+                <div class="flex justify-center">
+                    <span class="px-3 py-1 bg-gray-200/50 text-xs rounded-full text-gray-500">今天</span>
+                </div>
+                <!-- Messages will be injected here -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-3 border-t border-gray-100 bg-white relative">
+                <!-- Emoji Picker Popover -->
+                <div id="emoji-picker" class="hidden absolute bottom-full left-0 mb-2 ml-3 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-64 h-64 overflow-y-auto z-50">
+                    <div class="grid grid-cols-6 gap-2" id="emoji-grid">
+                        <!-- Emojis will be injected here -->
+                    </div>
+                </div>
+
+                <div class="flex items-center mb-2 text-gray-500 flex-wrap gap-1">
+                    <button class="p-2 hover:text-primary transition-colors" id="emoji-btn" title="表情">
+                        <i class="fas fa-smile"></i>
+                    </button>
+                    
+                    <!-- Direct Action Buttons -->
+                    <button class="px-2 py-1 text-sm bg-gray-100 hover:bg-primary hover:text-white rounded-full transition-colors" onclick="insertText('@成小理 ')">@成小理</button>
+                    <button class="px-2 py-1 text-sm bg-gray-100 hover:bg-primary hover:text-white rounded-full transition-colors" onclick="insertText('@音乐 ')">@音乐</button>
+                    <button class="px-2 py-1 text-sm bg-gray-100 hover:bg-primary hover:text-white rounded-full transition-colors" onclick="insertText('@电影 ')">@电影</button>
+                    <button class="px-2 py-1 text-sm bg-gray-100 hover:bg-primary hover:text-white rounded-full transition-colors" onclick="insertText('@天气 ')">@天气</button>
+                    <button class="px-2 py-1 text-sm bg-gray-100 hover:bg-primary hover:text-white rounded-full transition-colors" onclick="insertText('@新闻 ')">@新闻</button>
+
+
+                    <div class="w-px h-4 bg-gray-300 mx-1"></div>
+
+                    <button class="p-2 hover:text-primary transition-colors" onclick="alert('图片功能正在建设中')">
+                        <i class="fas fa-image"></i>
+                    </button>
+                    <button class="p-2 hover:text-primary transition-colors" onclick="alert('语音功能正在建设中')">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <div class="flex-1"></div>
+                    <button class="p-2 hover:text-primary transition-colors" onclick="alert('更多功能正在建设中')">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </button>
+                </div>
+                <div class="flex items-end">
+                    <textarea id="message-input" placeholder="输入消息..." class="flex-1 border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none transition-all" rows="2"></textarea>
+                    <button id="send-message" class="ml-3 bg-primary text-white rounded-full p-3 hover:bg-primary/90 transition-colors shadow-md hover:shadow-lg">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        var socket = io();
+        var nickname = "{{ nickname }}";
+
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            socket.emit('join', {nickname: nickname});
+        });
+
+        socket.on('update_users', function(data) {
+            var users = data.users;
+            var listContainer = document.getElementById('user-list');
+            listContainer.innerHTML = '';
+            document.getElementById('online-count').innerText = users.length + ' 人在线';
+            
+            users.forEach(function(user) {
+                var item = document.createElement('div');
+                item.className = 'chat-item flex items-center p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-all-300';
+                item.onclick = function() { insertText('@' + user + ' '); };
+                item.innerHTML = `
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                            ${user[0].toUpperCase()}
+                        </div>
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border-2 border-white"></span>
+                    </div>
+                    <div class="ml-3 flex-1 min-w-0">
+                        <h4 class="font-medium text-dark truncate">${user}</h4>
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+        });
+
+        socket.on('receive_message', function(data) {
+            appendMessage(data);
+        });
+
+        // AI Streaming Logic
+        // Use a map to store active AI messages by ID to handle concurrency
+        var activeAIMessages = {};
+
+        socket.on('ai_response_start', function(data) {
+            var container = document.getElementById('message-container');
+            var div = document.createElement('div');
+            div.className = 'flex items-end';
+            div.id = 'ai-msg-' + data.id;
+            
+            var avatarHtml = `
+                <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
+                    ${data.user[0].toUpperCase()}
+                </div>`;
+            
+            var contentHtml = `
+                <div class="ml-2 max-w-[70%]">
+                    <div class="bg-white rounded-t-lg rounded-br-lg shadow-soft p-3">
+                        <p class="text-sm break-words ai-content"></p>
+                    </div>
+                    <span class="text-xs text-gray-400 ml-2 mt-1 block">
+                        ${data.user} 正在输入...
+                    </span>
+                </div>`;
+            
+            div.innerHTML = avatarHtml + contentHtml;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            
+            activeAIMessages[data.id] = div.querySelector('.ai-content');
+        });
+
+        socket.on('ai_response_chunk', function(data) {
+            var contentElement = activeAIMessages[data.id];
+            if (contentElement) {
+                contentElement.textContent += data.content;
+                var container = document.getElementById('message-container');
+                container.scrollTop = container.scrollHeight;
+            }
+        });
+
+        socket.on('ai_response_end', function(data) {
+            var div = document.getElementById('ai-msg-' + data.id);
+            if (div) {
+                var timeSpan = div.querySelector('span.text-gray-400');
+                var now = new Date();
+                var timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                timeSpan.innerText = '成小理 ' + timeStr;
+            }
+            delete activeAIMessages[data.id];
+        });
+
+        socket.on('system_message', function(data) {
+            var container = document.getElementById('message-container');
+            var div = document.createElement('div');
+            div.className = 'flex justify-center my-2';
+            div.innerHTML = `<span class="px-3 py-1 bg-gray-100 text-xs rounded-full text-gray-400">${data.msg}</span>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        });
+
+        function appendMessage(data) {
+            var container = document.getElementById('message-container');
+            var isSelf = data.is_self;
+            var div = document.createElement('div');
+            div.className = isSelf ? 'flex items-end justify-end' : 'flex items-end';
+            
+            var avatarHtml = `
+                <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
+                    ${data.user[0].toUpperCase()}
+                </div>`;
+            
+            var contentHtml = `
+                <div class="${isSelf ? 'mr-2' : 'ml-2'} max-w-[70%]">
+                    <div class="${isSelf ? 'bg-primary text-white rounded-t-lg rounded-bl-lg' : 'bg-white rounded-t-lg rounded-br-lg'} shadow-soft p-3">
+                        <p class="text-sm break-words">${data.msg}</p>
+                    </div>
+                    <span class="text-xs text-gray-400 ${isSelf ? 'mr-2 text-right' : 'ml-2'} mt-1 block">
+                        ${data.user} ${data.time}
+                    </span>
+                </div>`;
+
+            if (isSelf) {
+                div.innerHTML = contentHtml; // Avatar optional for self
+            } else {
+                div.innerHTML = avatarHtml + contentHtml;
+            }
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Input handling
+        var input = document.getElementById('message-input');
+        var sendBtn = document.getElementById('send-message');
+
+        function sendMessage() {
+            var msg = input.value.trim();
+            if (!msg) return;
+            socket.emit('send_message', {msg: msg});
+            input.value = '';
+            input.style.height = 'auto';
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        input.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        function insertEmoji(emoji) {
+            input.value += emoji;
+            input.focus();
+        }
+
+        function insertText(text) {
+            input.value += text;
+            input.focus();
+        }
+
+        // Emoji Picker Logic
+        const emojis = [
+            '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+            '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', 'worried', '😕', '🙁', '☹️', '😣',
+            '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', 'mw_sweat', '😥', '😓', '🤗', '🤔',
+            '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢',
+            '🤮', 'sneezing_face', 'mask', 'thermometer_face', 'head_bandage', 'money_mouth_face', 'cowboy_hat_face', 'smiling_imp', 'imp', 'skull', 'ghost', 'alien', 'robot',
+            'clap', '👍', '👎', '👊', '✊', '🤛', '🤜', '🤞', '✌️', '🤟', '🤘', '👌', '🤏', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', '🖐', '🖖',
+            '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝',
+            '🔥', '✨', '🌟', '⭐', '🌈', '☀️', '🌙', '☁️', '❄️', '💧', '☔', '⚡', '🎈', '🎉', '🎊', '🎁', '🎂', '🎄', '🎃'
+        ];
+
+        const emojiPicker = document.getElementById('emoji-picker');
+        const emojiGrid = document.getElementById('emoji-grid');
+        const emojiBtn = document.getElementById('emoji-btn');
+        
+        // Populate emojis
+        emojis.forEach(emoji => {
+            // Filter out placeholder strings if any (some from list copy might be text)
+            if (emoji.length > 10) return; 
+            
+            const btn = document.createElement('button');
+            btn.className = 'text-xl hover:bg-gray-100 rounded p-1 transition-colors';
+            btn.textContent = emoji;
+            btn.onclick = (e) => {
+                e.preventDefault(); // Prevent form submission or focus loss weirdness
+                insertEmoji(emoji);
+                emojiPicker.classList.add('hidden');
+            };
+            emojiGrid.appendChild(btn);
+        });
+
+        // Toggle picker
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            emojiPicker.classList.toggle('hidden');
+        });
+        
+        // Close picker when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!emojiPicker.contains(e.target) && !emojiBtn.contains(e.target)) {
+                emojiPicker.classList.add('hidden');
+            }
+        });
+
+        // Sidebar toggle
+        var sidebar = document.getElementById('sidebar');
+        document.getElementById('toggle-sidebar').addEventListener('click', function() {
+            sidebar.classList.add('translate-x-[-100%]');
+        });
+        document.getElementById('show-sidebar').addEventListener('click', function() {
+            sidebar.classList.remove('translate-x-[-100%]');
+        });
+        
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 768) {
+                sidebar.classList.remove('translate-x-[-100%]');
+            } else {
+                sidebar.classList.add('translate-x-[-100%]');
+            }
+        });
+    </script>
+</body>
+</html>
