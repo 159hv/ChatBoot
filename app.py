@@ -7,6 +7,9 @@ if getattr(sys, 'frozen', False) and sys.platform == 'win32':
     for module in ['eventlet.hubs.epolls', 'eventlet.hubs.kqueue', 'eventlet.hubs.poll', 'eventlet.hubs.selects']:
         sys.modules[module] = ModuleType(module)
 
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from config import Config
@@ -109,6 +112,8 @@ def call_ai_api(prompt, room_id):
         
     except Exception as e:
         print(f"AI Error: {e}")
+        import traceback
+        traceback.print_exc()
         socketio.emit('system_message', {'msg': '成小理暂时无法回复，请稍后再试。'}, room=room_id)
 
 @socketio.on('send_message')
