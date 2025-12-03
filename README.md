@@ -1,4 +1,4 @@
-# ChatBoot - 智能聊天机器人
+# 局域网聊天室
 
 本项目为使用 Python 3 + Flask + WebSocket + HTML5 + CSS3 + JS (jQuery) 实现的 Web 在线聊天室，集成智能助手功能。
 
